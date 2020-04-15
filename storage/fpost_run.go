@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/filecoin-project/go-address"
 	"time"
 
@@ -195,6 +196,7 @@ func (s *FPoStScheduler) runPost(ctx context.Context, eps abi.ChainEpoch, ts *ty
 
 	postOut, err := s.sb.GenerateFallbackPoSt(ctx, abi.ActorID(mid), ssi, abi.PoStRandomness(rand), faults)
 	if err != nil {
+		fmt.Println("DIE, CAN'T MAKE POST 199")
 		return nil, xerrors.Errorf("running post failed: %w", err)
 	}
 

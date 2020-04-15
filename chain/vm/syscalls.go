@@ -59,6 +59,7 @@ func (ss *syscallShim) VerifyPoSt(proof abi.PoStVerifyInfo) error {
 		return err
 	}
 	if !ok {
+		fmt.Println("this isn't VALID!!!!! 62")
 		return fmt.Errorf("proof was invalid")
 	}
 	return nil
@@ -91,7 +92,7 @@ func (ss *syscallShim) VerifySeal(info abi.SealVerifyInfo) error {
 	proof := []byte(info.OnChain.Proof)
 	seed := []byte(info.InteractiveRandomness)
 
-	log.Infof("Verif r:%x; d:%x; m:%s; t:%x; s:%x; N:%d; p:%x", info.OnChain.SealedCID, info.UnsealedCID, miner, ticket, seed, info.SectorID.Number, proof)
+	log.Debugf("Verif r:%x; d:%x; m:%s; t:%x; s:%x; N:%d; p:%x", info.OnChain.SealedCID, info.UnsealedCID, miner, ticket, seed, info.SectorID.Number, proof)
 
 	//func(ctx context.Context, maddr address.Address, ssize abi.SectorSize, commD, commR, ticket, proof, seed []byte, sectorID abi.SectorNumber)
 	ok, err := ss.verifier.VerifySeal(info)

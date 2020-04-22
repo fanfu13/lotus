@@ -15,6 +15,7 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
+	"github.com/filecoin-project/specs-actors/actors/builtin/power"
 	"github.com/filecoin-project/specs-actors/actors/crypto"
 
 	"github.com/filecoin-project/lotus/chain/store"
@@ -70,7 +71,7 @@ type FullNode interface {
 
 	// miner
 
-	MinerGetBaseInfo(context.Context, address.Address, types.TipSetKey) (*MiningBaseInfo, error)
+	MinerGetBaseInfo(context.Context, address.Address, abi.ChainEpoch, types.TipSetKey) (*MiningBaseInfo, error)
 	MinerCreateBlock(context.Context, *BlockTemplate) (*types.BlockMsg, error)
 
 	// // UX ?
@@ -119,7 +120,7 @@ type FullNode interface {
 	StateListMessages(ctx context.Context, match *types.Message, tsk types.TipSetKey, toht abi.ChainEpoch) ([]cid.Cid, error)
 
 	StateNetworkName(context.Context) (dtypes.NetworkName, error)
-	StateMinerSectors(context.Context, address.Address, *abi.BitField, types.TipSetKey) ([]*ChainSectorInfo, error)
+	StateMinerSectors(context.Context, address.Address, *abi.BitField, bool, types.TipSetKey) ([]*ChainSectorInfo, error)
 	StateMinerProvingSet(context.Context, address.Address, types.TipSetKey) ([]*ChainSectorInfo, error)
 	StateMinerPower(context.Context, address.Address, types.TipSetKey) (*MinerPower, error)
 	StateMinerInfo(context.Context, address.Address, types.TipSetKey) (miner.MinerInfo, error)
@@ -254,8 +255,8 @@ type VoucherSpec struct {
 }
 
 type MinerPower struct {
-	MinerPower types.BigInt
-	TotalPower types.BigInt
+	MinerPower power.Claim
+	TotalPower power.Claim
 }
 
 type QueryOffer struct {
@@ -381,7 +382,7 @@ type ComputeStateOutput struct {
 type MiningBaseInfo struct {
 	MinerPower      types.BigInt
 	NetworkPower    types.BigInt
-	Sectors         []*ChainSectorInfo
+	Sectors         []abi.SectorInfo
 	WorkerKey       address.Address
 	SectorSize      abi.SectorSize
 	PrevBeaconEntry types.BeaconEntry

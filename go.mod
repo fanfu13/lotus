@@ -12,7 +12,6 @@ require (
 	github.com/davidlazar/go-crypto v0.0.0-20190912175916-7055855a373f // indirect
 	github.com/docker/go-units v0.4.0
 	github.com/drand/drand v0.7.2
-	github.com/filecoin-project/chain-validation v0.0.6-0.20200331143132-15970e639ac2
 	github.com/filecoin-project/filecoin-ffi v0.0.0-20200326153646-e899cc1dd072
 	github.com/filecoin-project/go-address v0.0.2-0.20200218010043-eb9bb40ed5be
 	github.com/filecoin-project/go-amt-ipld/v2 v2.0.1-0.20200131012142-05d80eeccc5e
@@ -24,10 +23,10 @@ require (
 	github.com/filecoin-project/go-padreader v0.0.0-20200210211231-548257017ca6
 	github.com/filecoin-project/go-paramfetch v0.0.2-0.20200218225740-47c639bab663
 	github.com/filecoin-project/go-statestore v0.1.0
-	github.com/filecoin-project/sector-storage v0.0.0-20200417140021-6850784b1efe
-	github.com/filecoin-project/specs-actors v0.0.0-20200416213853-1bd9b52a4621
+	github.com/filecoin-project/sector-storage v0.0.0-20200417225459-e75536581a08
+	github.com/filecoin-project/specs-actors v0.0.0-20200421235624-312ac81e2aa4
 	github.com/filecoin-project/specs-storage v0.0.0-20200417134612-61b2d91a6102
-	github.com/filecoin-project/storage-fsm v0.0.0-20200415180041-afc45d4b6e8b
+	github.com/filecoin-project/storage-fsm v0.0.0-20200420183220-1515cffb5d13
 	github.com/gbrlsnchs/jwt/v3 v3.0.0-beta.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4

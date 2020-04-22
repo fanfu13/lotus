@@ -208,7 +208,7 @@ func builder(t *testing.T, nFull int, storage []int) ([]test.TestNode, []test.Te
 	templ := &genesis.Template{
 		Accounts:  genaccs,
 		Miners:    genms,
-		Timestamp: uint64(time.Now().Unix() - 1000), // some time sufficiently far in the past
+		Timestamp: uint64(time.Now().Unix() - 10000), // some time sufficiently far in the past
 	}
 
 	// END PRESEAL SECTION
@@ -338,7 +338,7 @@ func mockSbBuilder(t *testing.T, nFull int, storage []int) ([]test.TestNode, []t
 	templ := &genesis.Template{
 		Accounts:  genaccs,
 		Miners:    genms,
-		Timestamp: uint64(time.Now().Unix() - 1000),
+		Timestamp: uint64(time.Now().Unix() - 10000),
 	}
 
 	// END PRESEAL SECTION
@@ -393,8 +393,7 @@ func mockSbBuilder(t *testing.T, nFull int, storage []int) ([]test.TestNode, []t
 			node.Override(new(sectorstorage.SectorManager), func() (sectorstorage.SectorManager, error) {
 				return mock.NewMockSectorMgr(5, build.SectorSizes[0]), nil
 			}),
-			node.Override(new(ffiwrapper.Verifier), ffiwrapper.ProofVerifier),
-			//node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
+			node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
 			node.Unset(new(*sectorstorage.Manager)),
 		))
 	}

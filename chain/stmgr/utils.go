@@ -2,10 +2,18 @@ package stmgr
 
 import (
 	"context"
+	"os"
+
+	cid "github.com/ipfs/go-cid"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
 	amt "github.com/filecoin-project/go-amt-ipld/v2"
 	"github.com/filecoin-project/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/abi/big"
 	"github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/actors/builtin/market"
@@ -14,20 +22,13 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/crypto"
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 
-	"github.com/filecoin-project/go-address"
-
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
-
-	cid "github.com/ipfs/go-cid"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	cbg "github.com/whyrusleeping/cbor-gen"
-	"golang.org/x/xerrors"
 )
 
 func GetNetworkName(ctx context.Context, sm *StateManager, st cid.Cid) (dtypes.NetworkName, error) {
@@ -56,33 +57,36 @@ func GetMinerWorkerRaw(ctx context.Context, sm *StateManager, st cid.Cid, maddr 
 	return vm.ResolveToKeyAddr(state, cst, mas.Info.Worker)
 }
 
-func GetPower(ctx context.Context, sm *StateManager, ts *types.TipSet, maddr address.Address) (types.BigInt, types.BigInt, error) {
-	return getPowerRaw(ctx, sm, ts.ParentState(), maddr)
+func GetPower(ctx context.Context, sm *StateManager, ts *types.TipSet, maddr address.Address) (power.Claim, power.Claim, error) {
+	return GetPowerRaw(ctx, sm, ts.ParentState(), maddr)
 }
 
-func getPowerRaw(ctx context.Context, sm *StateManager, st cid.Cid, maddr address.Address) (types.BigInt, types.BigInt, error) {
+func GetPowerRaw(ctx context.Context, sm *StateManager, st cid.Cid, maddr address.Address) (power.Claim, power.Claim, error) {
 	var ps power.State
 	_, err := sm.LoadActorStateRaw(ctx, builtin.StoragePowerActorAddr, &ps, st)
 	if err != nil {
-		return big.Zero(), big.Zero(), xerrors.Errorf("(get sset) failed to load power actor state: %w", err)
+		return power.Claim{}, power.Claim{}, xerrors.Errorf("(get sset) failed to load power actor state: %w", err)
 	}
 
-	var mpow big.Int
+	var mpow power.Claim
 	if maddr != address.Undef {
 		cm, err := adt.AsMap(sm.cs.Store(ctx), ps.Claims)
 		if err != nil {
-			return types.BigInt{}, types.BigInt{}, err
+			return power.Claim{}, power.Claim{}, err
 		}
 
 		var claim power.Claim
 		if _, err := cm.Get(adt.AddrKey(maddr), &claim); err != nil {
-			return big.Zero(), big.Zero(), err
+			return power.Claim{}, power.Claim{}, err
 		}
 
-		mpow = claim.QualityAdjPower // TODO: is quality adjusted power what we want here?
+		mpow = claim
 	}
 
-	return mpow, ps.TotalQualityAdjPower, nil
+	return mpow, power.Claim{
+		RawBytePower:    ps.TotalRawBytePower,
+		QualityAdjPower: ps.TotalQualityAdjPower,
+	}, nil
 }
 
 func SectorSetSizes(ctx context.Context, sm *StateManager, maddr address.Address, ts *types.TipSet) (api.MinerSectors, error) {
@@ -121,21 +125,21 @@ func PreCommitInfo(ctx context.Context, sm *StateManager, maddr address.Address,
 	return *i, nil
 }
 
-func GetMinerSectorSet(ctx context.Context, sm *StateManager, ts *types.TipSet, maddr address.Address, filter *abi.BitField) ([]*api.ChainSectorInfo, error) {
+func GetMinerSectorSet(ctx context.Context, sm *StateManager, ts *types.TipSet, maddr address.Address, filter *abi.BitField, filterOut bool) ([]*api.ChainSectorInfo, error) {
 	var mas miner.State
 	_, err := sm.LoadActorState(ctx, maddr, &mas, ts)
 	if err != nil {
 		return nil, xerrors.Errorf("(get sset) failed to load miner actor state: %w", err)
 	}
 
-	return LoadSectorsFromSet(ctx, sm.ChainStore().Blockstore(), mas.Sectors, filter)
+	return LoadSectorsFromSet(ctx, sm.ChainStore().Blockstore(), mas.Sectors, filter, filterOut)
 }
 
-func GetSectorsForWinningPoSt(ctx context.Context, pv ffiwrapper.Verifier, sm *StateManager, ts *types.TipSet, maddr address.Address) ([]abi.SectorInfo, error) {
+func GetSectorsForWinningPoSt(ctx context.Context, pv ffiwrapper.Verifier, sm *StateManager, st cid.Cid, maddr address.Address, rand abi.PoStRandomness) ([]abi.SectorInfo, error) {
 	var mas miner.State
-	_, err := sm.LoadActorStateRaw(ctx, maddr, &mas, ts.ParentState())
+	_, err := sm.LoadActorStateRaw(ctx, maddr, &mas, st)
 	if err != nil {
-		return nil, xerrors.Errorf("(get ssize) failed to load miner actor state: %w", err)
+		return nil, xerrors.Errorf("(get sectors) failed to load miner actor state: %w", err)
 	}
 
 	// TODO: Optimization: we could avoid loaditg the whole proving set here if we had AMT.GetNth with bitfield filtering
@@ -157,12 +161,6 @@ func GetSectorsForWinningPoSt(ctx context.Context, pv ffiwrapper.Verifier, sm *S
 	mid, err := address.IDFromAddress(maddr)
 	if err != nil {
 		return nil, xerrors.Errorf("getting miner ID: %w", err)
-	}
-
-	// TODO: use the right dst, also NB: not using any 'entropy' in this call because nicola really didnt want it
-	rand, err := sm.cs.GetRandomness(ctx, ts.Cids(), crypto.DomainSeparationTag_ElectionPoStChallengeSeed, ts.Height() - 1, nil)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to get randomness for winning post: %w", err)
 	}
 
 	ids, err := pv.GenerateWinningPoStSectorChallenge(ctx, wpt, abi.ActorID(mid), rand, uint64(len(sectorSet)))
@@ -207,34 +205,17 @@ func GetMinerSlashed(ctx context.Context, sm *StateManager, ts *types.TipSet, ma
 
 	store := sm.cs.Store(ctx)
 
-	{
-		claims, err := adt.AsMap(store, spas.Claims)
-		if err != nil {
-			return false, err
-		}
-
-		ok, err := claims.Get(power.AddrKey(maddr), nil)
-		if err != nil {
-			return false, err
-		}
-		if !ok {
-			return true, nil
-		}
+	claims, err := adt.AsMap(store, spas.Claims)
+	if err != nil {
+		return false, err
 	}
 
-	{
-		detectedFaulty, err := adt.AsMap(store, spas.PoStDetectedFaultMiners)
-		if err != nil {
-			return false, err
-		}
-
-		ok, err := detectedFaulty.Get(power.AddrKey(maddr), nil)
-		if err != nil {
-			return false, err
-		}
-		if ok {
-			return true, nil
-		}
+	ok, err := claims.Get(power.AddrKey(maddr), nil)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return true, nil
 	}
 
 	return false, nil
@@ -247,7 +228,7 @@ func GetMinerDeadlines(ctx context.Context, sm *StateManager, ts *types.TipSet, 
 		return nil, xerrors.Errorf("(get ssize) failed to load miner actor state: %w", err)
 	}
 
-	return miner.LoadDeadlines(sm.cs.Store(ctx), &mas)
+	return mas.LoadDeadlines(sm.cs.Store(ctx))
 }
 
 func GetMinerFaults(ctx context.Context, sm *StateManager, ts *types.TipSet, maddr address.Address) ([]abi.SectorNumber, error) {
@@ -329,7 +310,7 @@ func ListMinerActors(ctx context.Context, sm *StateManager, ts *types.TipSet) ([
 	return miners, nil
 }
 
-func LoadSectorsFromSet(ctx context.Context, bs blockstore.Blockstore, ssc cid.Cid, filter *abi.BitField) ([]*api.ChainSectorInfo, error) {
+func LoadSectorsFromSet(ctx context.Context, bs blockstore.Blockstore, ssc cid.Cid, filter *abi.BitField, filterOut bool) ([]*api.ChainSectorInfo, error) {
 	a, err := amt.LoadAMT(ctx, cbor.NewCborStore(bs), ssc)
 	if err != nil {
 		return nil, err
@@ -342,7 +323,7 @@ func LoadSectorsFromSet(ctx context.Context, bs blockstore.Blockstore, ssc cid.C
 			if err != nil {
 				return xerrors.Errorf("filter check error: %w", err)
 			}
-			if set {
+			if set == filterOut {
 				return nil
 			}
 		}
@@ -409,7 +390,7 @@ func GetProvingSetRaw(ctx context.Context, sm *StateManager, mas miner.State) ([
 		return nil, err
 	}
 
-	provset, err := LoadSectorsFromSet(ctx, sm.cs.Blockstore(), mas.Sectors, notProving)
+	provset, err := LoadSectorsFromSet(ctx, sm.cs.Blockstore(), mas.Sectors, notProving, true)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to get proving set: %w", err)
 	}
@@ -417,36 +398,69 @@ func GetProvingSetRaw(ctx context.Context, sm *StateManager, mas miner.State) ([
 	return provset, nil
 }
 
-func MinerGetBaseInfo(ctx context.Context, sm *StateManager, tsk types.TipSetKey, maddr address.Address) (*api.MiningBaseInfo, error) {
+func GetLookbackTipSetForRound(ctx context.Context, sm *StateManager, ts *types.TipSet, round abi.ChainEpoch) (*types.TipSet, error) {
+	var lbr abi.ChainEpoch
+	if round > build.WinningPoStSectorSetLookback {
+		lbr = round - build.WinningPoStSectorSetLookback
+	}
+
+	// more null blocks than our lookback
+	if lbr > ts.Height() {
+		return ts, nil
+	}
+
+	lbts, err := sm.ChainStore().GetTipsetByHeight(ctx, lbr, ts)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get lookback tipset: %w", err)
+	}
+
+	return lbts, nil
+}
+
+func MinerGetBaseInfo(ctx context.Context, sm *StateManager, tsk types.TipSetKey, round abi.ChainEpoch, maddr address.Address, pv ffiwrapper.Verifier) (*api.MiningBaseInfo, error) {
 	ts, err := sm.ChainStore().LoadTipSet(tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load tipset for mining base: %w", err)
 	}
 
-	st, _, err := sm.TipSetState(ctx, ts)
+	lbts, err := GetLookbackTipSetForRound(ctx, sm, ts, round)
+	if err != nil {
+		return nil, xerrors.Errorf("getting lookback miner actor state: %w", err)
+	}
+
+	lbst, _, err := sm.TipSetState(ctx, lbts)
 	if err != nil {
 		return nil, err
 	}
 
 	var mas miner.State
-	_, err = sm.LoadActorState(ctx, maddr, &mas, ts)
-	if err != nil {
-		return nil, xerrors.Errorf("(get sset) failed to load miner actor state: %w", err)
-	}
-
-	provset, err := GetProvingSetRaw(ctx, sm, mas)
-	if err != nil {
+	if _, err := sm.LoadActorStateRaw(ctx, maddr, &mas, lbst); err != nil {
 		return nil, err
 	}
 
-	mpow, tpow, err := getPowerRaw(ctx, sm, st, maddr)
+	// TODO: use the right dst, also NB: not using any 'entropy' in this call because nicola really didnt want it
+	prand, err := sm.cs.GetRandomness(ctx, ts.Cids(), crypto.DomainSeparationTag_ElectionPoStChallengeSeed, round-1, nil)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get randomness for winning post: %w", err)
+	}
+
+	sectors, err := GetSectorsForWinningPoSt(ctx, pv, sm, lbst, maddr, prand)
+	if err != nil {
+		return nil, xerrors.Errorf("getting wpost proving set: %w", err)
+	}
+
+	mpow, tpow, err := GetPowerRaw(ctx, sm, lbst, maddr)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to get power: %w", err)
 	}
 
 	prev, err := sm.ChainStore().GetLatestBeaconEntry(ts)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get latest beacon entry: %w", err)
+		if os.Getenv("LOTUS_IGNORE_DRAND") != "_yes_" {
+			return nil, xerrors.Errorf("failed to get latest beacon entry: %w", err)
+		}
+
+		prev = &types.BeaconEntry{}
 	}
 
 	worker, err := sm.ResolveToKeyAddress(ctx, mas.GetWorker(), ts)
@@ -455,9 +469,9 @@ func MinerGetBaseInfo(ctx context.Context, sm *StateManager, tsk types.TipSetKey
 	}
 
 	return &api.MiningBaseInfo{
-		MinerPower:      mpow,
-		NetworkPower:    tpow,
-		Sectors:         provset,
+		MinerPower:      mpow.QualityAdjPower,
+		NetworkPower:    tpow.QualityAdjPower,
+		Sectors:         sectors,
 		WorkerKey:       worker,
 		SectorSize:      mas.Info.SectorSize,
 		PrevBeaconEntry: *prev,

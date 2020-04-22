@@ -87,8 +87,8 @@ type FullNodeStruct struct {
 		MpoolGetNonce    func(context.Context, address.Address) (uint64, error)                 `perm:"read"`
 		MpoolSub         func(context.Context) (<-chan api.MpoolUpdate, error)                  `perm:"read"`
 
-		MinerGetBaseInfo func(context.Context, address.Address, types.TipSetKey) (*api.MiningBaseInfo, error) `perm:"read"`
-		MinerCreateBlock func(context.Context, *api.BlockTemplate) (*types.BlockMsg, error)                   `perm:"write"`
+		MinerGetBaseInfo func(context.Context, address.Address, abi.ChainEpoch, types.TipSetKey) (*api.MiningBaseInfo, error) `perm:"read"`
+		MinerCreateBlock func(context.Context, *api.BlockTemplate) (*types.BlockMsg, error)                                   `perm:"write"`
 
 		WalletNew            func(context.Context, crypto.SigType) (address.Address, error)                       `perm:"write"`
 		WalletHas            func(context.Context, address.Address) (bool, error)                                 `perm:"write"`
@@ -115,10 +115,10 @@ type FullNodeStruct struct {
 		ClientGenCar      func(ctx context.Context, ref api.FileRef, outpath string) error                                     `perm:"write"`
 
 		StateNetworkName         func(context.Context) (dtypes.NetworkName, error)                                                                   `perm:"read"`
-		StateMinerSectors        func(context.Context, address.Address, *abi.BitField, types.TipSetKey) ([]*api.ChainSectorInfo, error)              `perm:"read"`
+		StateMinerSectors        func(context.Context, address.Address, *abi.BitField, bool, types.TipSetKey) ([]*api.ChainSectorInfo, error)        `perm:"read"`
 		StateMinerProvingSet     func(context.Context, address.Address, types.TipSetKey) ([]*api.ChainSectorInfo, error)                             `perm:"read"`
 		StateMinerPower          func(context.Context, address.Address, types.TipSetKey) (*api.MinerPower, error)                                    `perm:"read"`
-		StateMinerInfo     func(context.Context, address.Address, types.TipSetKey) (miner.MinerInfo, error)                                     `perm:"read"`
+		StateMinerInfo           func(context.Context, address.Address, types.TipSetKey) (miner.MinerInfo, error)                                    `perm:"read"`
 		StateMinerDeadlines      func(context.Context, address.Address, types.TipSetKey) (*miner.Deadlines, error)                                   `perm:"read"`
 		StateMinerFaults         func(context.Context, address.Address, types.TipSetKey) ([]abi.SectorNumber, error)                                 `perm:"read"`
 		StateSectorPreCommitInfo func(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (miner.SectorPreCommitOnChainInfo, error) `perm:"read"`
@@ -136,7 +136,7 @@ type FullNodeStruct struct {
 		StateMarketDeals         func(context.Context, types.TipSetKey) (map[string]api.MarketDeal, error)                                           `perm:"read"`
 		StateMarketStorageDeal   func(context.Context, abi.DealID, types.TipSetKey) (*api.MarketDeal, error)                                         `perm:"read"`
 		StateLookupID            func(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)                       `perm:"read"`
-		StateAccountKey func(context.Context, address.Address, types.TipSetKey) (address.Address, error) `perm:"read"`
+		StateAccountKey          func(context.Context, address.Address, types.TipSetKey) (address.Address, error)                                    `perm:"read"`
 		StateChangedActors       func(context.Context, cid.Cid, cid.Cid) (map[string]types.Actor, error)                                             `perm:"read"`
 		StateGetReceipt          func(context.Context, cid.Cid, types.TipSetKey) (*types.MessageReceipt, error)                                      `perm:"read"`
 		StateMinerSectorCount    func(context.Context, address.Address, types.TipSetKey) (api.MinerSectors, error)                                   `perm:"read"`
@@ -332,8 +332,8 @@ func (c *FullNodeStruct) MpoolSub(ctx context.Context) (<-chan api.MpoolUpdate, 
 	return c.Internal.MpoolSub(ctx)
 }
 
-func (c *FullNodeStruct) MinerGetBaseInfo(ctx context.Context, maddr address.Address, tsk types.TipSetKey) (*api.MiningBaseInfo, error) {
-	return c.Internal.MinerGetBaseInfo(ctx, maddr, tsk)
+func (c *FullNodeStruct) MinerGetBaseInfo(ctx context.Context, maddr address.Address, epoch abi.ChainEpoch, tsk types.TipSetKey) (*api.MiningBaseInfo, error) {
+	return c.Internal.MinerGetBaseInfo(ctx, maddr, epoch, tsk)
 }
 
 func (c *FullNodeStruct) MinerCreateBlock(ctx context.Context, bt *api.BlockTemplate) (*types.BlockMsg, error) {
@@ -488,8 +488,8 @@ func (c *FullNodeStruct) StateNetworkName(ctx context.Context) (dtypes.NetworkNa
 	return c.Internal.StateNetworkName(ctx)
 }
 
-func (c *FullNodeStruct) StateMinerSectors(ctx context.Context, addr address.Address, filter *abi.BitField, tsk types.TipSetKey) ([]*api.ChainSectorInfo, error) {
-	return c.Internal.StateMinerSectors(ctx, addr, filter, tsk)
+func (c *FullNodeStruct) StateMinerSectors(ctx context.Context, addr address.Address, filter *abi.BitField, filterOut bool, tsk types.TipSetKey) ([]*api.ChainSectorInfo, error) {
+	return c.Internal.StateMinerSectors(ctx, addr, filter, filterOut, tsk)
 }
 
 func (c *FullNodeStruct) StateMinerProvingSet(ctx context.Context, addr address.Address, tsk types.TipSetKey) ([]*api.ChainSectorInfo, error) {

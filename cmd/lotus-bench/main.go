@@ -132,6 +132,10 @@ var sealBenchCmd = &cli.Command{
 			Name:  "save-commit2-input",
 			Usage: "Save commit2 input to a file",
 		},
+		&cli.IntFlag{
+			Name:  "num-sectors",
+			Value: 1,
+		},
 	},
 	Action: func(c *cli.Context) error {
 		if c.Bool("no-gpu") {
@@ -218,7 +222,7 @@ var sealBenchCmd = &cli.Command{
 
 		var sealTimings []SealingResult
 		var sealedSectors []abi.SectorInfo
-		numSectors := abi.SectorNumber(1)
+		numSectors := abi.SectorNumber(c.Int("num-sectors"))
 		for i := abi.SectorNumber(1); i <= numSectors && robench == ""; i++ {
 			sid := abi.SectorID{
 				Miner:  mid,
@@ -399,7 +403,7 @@ var sealBenchCmd = &cli.Command{
 
 		if !c.Bool("skip-commit2") {
 			log.Info("generating winning post candidates")
-			fcandidates, err := sb.GenerateWinningPoStSectorChallenge(context.TODO(), spt, mid, challenge[:], uint64(len(sealedSectors)))
+			fcandidates, err := ffiwrapper.ProofVerifier.GenerateWinningPoStSectorChallenge(context.TODO(), spt, mid, challenge[:], uint64(len(sealedSectors)))
 			if err != nil {
 				return err
 			}

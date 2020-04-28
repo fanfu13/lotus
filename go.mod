@@ -10,7 +10,6 @@ require (
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/coreos/go-systemd/v22 v22.0.0
 	github.com/davidlazar/go-crypto v0.0.0-20190912175916-7055855a373f // indirect
-	github.com/dchest/blake2b v1.0.0
 	github.com/docker/go-units v0.4.0
 	github.com/drand/drand v0.7.2
 	github.com/filecoin-project/chain-validation v0.0.6-0.20200424212533-860752305527

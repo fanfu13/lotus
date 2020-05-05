@@ -717,7 +717,7 @@ var chainBisectCmd = &cli.Command{
 				return err
 			}
 
-			b, err := json.MarshalIndent(nd, "", "\t")
+			b, err := json.MarshalIndent(nd.Obj, "", "\t")
 			if err != nil {
 				return err
 			}
